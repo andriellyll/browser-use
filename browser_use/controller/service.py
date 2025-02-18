@@ -103,6 +103,15 @@ class Controller:
 			msg = None
 
 			try:
+
+				selenium_code = f"""
+	element_to_click = driver.find_element(By.XPATH, '{element_node.xpath}')
+	element_to_click.click()
+"""
+				
+				with open("output/selenium_test.py", "a", encoding="utf-8") as test_file:
+					test_file.write(selenium_code)
+					
 				download_path = await browser._click_element_node(element_node)
 				if download_path:
 					msg = f'💾  Downloaded file to {download_path}'

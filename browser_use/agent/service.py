@@ -535,6 +535,22 @@ class Agent:
 	@observe(name='agent.run', ignore_output=True)
 	async def run(self, max_steps: int = 100) -> AgentHistoryList:
 		"""Execute the task with maximum number of steps"""
+
+		selenium_code = """
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+import time
+
+driver = webdriver.Chrome()
+wait = WebDriverWait(driver, 10)
+			
+try:
+		"""
+
+		with open("output/selenium_test.py", "w", encoding="utf-8") as test_file:
+			test_file.write(selenium_code)
 		try:
 			self._log_agent_run()
 
@@ -571,7 +587,14 @@ class Agent:
 					break
 			else:
 				logger.info('❌ Failed to complete task in maximum steps')
-
+			selenium_code = """
+finally:
+	time.sleep(2)  
+	driver.quit()
+"""
+			with open("output/selenium_test.py", "a", encoding="utf-8") as test_file:
+				test_file.write(selenium_code)
+				
 			return self.history
 		finally:
 			self.telemetry.capture(
