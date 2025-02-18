@@ -27,17 +27,53 @@ from browser_use.utils import time_execution_async, time_execution_sync
 logger = logging.getLogger(__name__)
 from langchain_core.language_models.chat_models import BaseChatModel
 
+import os
+
+initial_selenium_code = """
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+import time
+
+driver = webdriver.Chrome()
+wait = WebDriverWait(driver, 10)
+			
+try:
+		"""
 
 class Controller:
 	def __init__(
 		self,
 		exclude_actions: list[str] = [],
 		output_model: Optional[Type[BaseModel]] = None,
+		save_selenium_code: Optional[str] = None,
+		save_py: Optional[str] = None,
 	):
+		if not save_py:
+			save_py = "output"
+	
+		self.save_py = save_py
+		self.save_selenium_code = save_selenium_code
+		
+		if self.save_selenium_code and '/' not in self.save_selenium_code:
+			self.save_selenium_code = f'{self.save_selenium_code}/'
+		
+		self._save_selenium_code(initial_selenium_code)
 		self.exclude_actions = exclude_actions
 		self.output_model = output_model
 		self.registry = Registry(exclude_actions)
 		self._register_default_actions()
+
+	def _save_selenium_code(self, selenium_action: str) -> None:
+		"""Create directory and save Selenium action to a separate code file if path is specified"""
+		if not self.save_selenium_code:
+			return 
+		os.makedirs(os.path.dirname(self.save_selenium_code), exist_ok=True)        # Save the Selenium action to a dedicated .py file per action
+		file_path = f"{self.save_selenium_code}{self.save_py}.py"
+		print("teste2")
+		with open(file_path, 'a', encoding='utf-8') as f:
+			f.write(selenium_action + '\n')
 
 	def _register_default_actions(self):
 		"""Register all default browser actions"""
@@ -73,6 +109,10 @@ class Controller:
 			await page.wait_for_load_state()
 			msg = f'🔗  Navigated to {params.url}'
 			logger.info(msg)
+
+			selenium_code = f"""\n\tdriver.get('{params.url}')"""
+				
+			self._save_selenium_code(selenium_code)
 			return ActionResult(extracted_content=msg, include_in_memory=True)
 
 		@self.registry.action('Go back', param_model=NoParamsAction)
@@ -109,9 +149,8 @@ class Controller:
 	element_to_click.click()
 """
 				
-				with open("output/selenium_test.py", "a", encoding="utf-8") as test_file:
-					test_file.write(selenium_code)
-					
+				self._save_selenium_code(selenium_code)
+
 				download_path = await browser._click_element_node(element_node)
 				if download_path:
 					msg = f'💾  Downloaded file to {download_path}'
@@ -160,11 +199,24 @@ class Controller:
 			await page.wait_for_load_state()
 			msg = f'🔄  Switched to tab {params.page_id}'
 			logger.info(msg)
+			selenium_code = f"""\n\tdriver.switch_to.window({params.page_id})"""
+				
+			self._save_selenium_code(selenium_code)
+			
 			return ActionResult(extracted_content=msg, include_in_memory=True)
 
 		@self.registry.action('Open url in new tab', param_model=OpenTabAction)
 		async def open_tab(params: OpenTabAction, browser: BrowserContext):
 			await browser.create_new_tab(params.url)
+
+			selenium_code = (
+					"from selenium.webdriver.common.action_chains import ActionChains\n"
+					"driver.execute_script('window.open()')\n"
+					"driver.switch_to.window(driver.window_handles[-1])\n"
+					f"driver.get('{params.url}')"
+			)
+			self._save_selenium_code(selenium_code)
+
 			msg = f'🔗  Opened new tab with {params.url}'
 			logger.info(msg)
 			return ActionResult(extracted_content=msg, include_in_memory=True)
@@ -200,9 +252,15 @@ class Controller:
 			page = await browser.get_current_page()
 			if params.amount is not None:
 				await page.evaluate(f'window.scrollBy(0, {params.amount});')
+
+				selenium_code = f"""\n\tdriver.execute_script("window.scrollTo(0, {params.amount})")"""
 			else:
 				await page.evaluate('window.scrollBy(0, window.innerHeight);')
-
+				
+				selenium_code = f"""\n\tdriver.execute_script("window.scrollTo(0, window.innerHeight)")"""
+			
+			self._save_selenium_code(selenium_code)
+			
 			amount = f'{params.amount} pixels' if params.amount is not None else 'one page'
 			msg = f'🔍  Scrolled down the page by {amount}'
 			logger.info(msg)
@@ -240,6 +298,70 @@ class Controller:
 			page = await browser.get_current_page()
 
 			await page.keyboard.press(params.keys)
+
+			await page.keyboard.press(params.keys)
+			
+			# Mapeamento de nomes de teclas comuns para Keys do Selenium
+			key_mapping = {
+				'Enter': 'Keys.ENTER',
+				'Backspace': 'Keys.BACKSPACE',
+				'Tab': 'Keys.TAB',
+				'Delete': 'Keys.DELETE',
+				'PageDown': 'Keys.PAGE_DOWN',
+				'PageUp': 'Keys.PAGE_UP',
+				'ArrowDown': 'Keys.ARROW_DOWN',
+				'ArrowUp': 'Keys.ARROW_UP',
+				'ArrowLeft': 'Keys.ARROW_LEFT',
+				'ArrowRight': 'Keys.ARROW_RIGHT',
+				'Escape': 'Keys.ESCAPE',
+				'Control': 'Keys.CONTROL',
+				'Shift': 'Keys.SHIFT',
+				'Alt': 'Keys.ALT',
+			}
+
+			# Verifica se é um atalho (contém +)
+			if '+' in params.keys:
+				keys = params.keys.split('+')
+				modifiers = keys[:-1]  # todas as teclas exceto a última
+				final_key = keys[-1]   # última tecla
+
+				selenium_code = f"""
+	from selenium.webdriver.common.keys import Keys
+	from selenium.webdriver.common.action_chains import ActionChains
+	
+	actions = ActionChains(driver)
+
+"""
+				# Adiciona key_down para cada modificador
+				for mod in modifiers:
+					mod_key = key_mapping.get(mod, f"'{mod}'")
+					selenium_code += f"\tactions.key_down({mod_key})\n"
+
+				# Adiciona a tecla final
+				final_selenium_key = key_mapping.get(final_key, f"'{final_key}'")
+				selenium_code += f"\tactions.send_keys({final_selenium_key})\n"
+
+				# Adiciona key_up para cada modificador (em ordem reversa)
+				for mod in reversed(modifiers):
+					mod_key = key_mapping.get(mod, f"'{mod}'")
+					selenium_code += f"\tactions.key_up({mod_key})\n"
+
+				selenium_code += "\tactions.perform()\n"
+
+			else:
+				# Tecla única (não é atalho)
+				selenium_key = key_mapping.get(params.keys, f"'{params.keys}'")
+				selenium_code = f"""
+	from selenium.webdriver.common.keys import Keys
+	from selenium.webdriver.common.action_chains import ActionChains
+	
+	actions = ActionChains(driver)
+	actions.send_keys({selenium_key})
+	actions.perform()
+"""
+			
+			self._save_selenium_code(selenium_code)
+
 			msg = f'⌨️  Sent keys: {params.keys}'
 			logger.info(msg)
 			return ActionResult(extracted_content=msg, include_in_memory=True)
@@ -287,9 +409,11 @@ class Controller:
 			page = await browser.get_current_page()
 			selector_map = await browser.get_selector_map()
 			dom_element = selector_map[index]
+			
+			print('get dropdown options')
 
 			try:
-				# Frame-aware approach since we know it works
+				# Frame-aware approach since we know it works 
 				all_options = []
 				frame_index = 0
 
@@ -361,6 +485,8 @@ class Controller:
 			page = await browser.get_current_page()
 			selector_map = await browser.get_selector_map()
 			dom_element = selector_map[index]
+
+			print('select dropdown')
 
 			# Validate that we're working with a select element
 			if dom_element.tag_name != 'select':

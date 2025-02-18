@@ -68,7 +68,7 @@ class Agent:
 		llm: BaseChatModel,
 		browser: Browser | None = None,
 		browser_context: BrowserContext | None = None,
-		controller: Controller = Controller(),
+		controller: Controller = Controller(save_py="code", save_selenium_code="output/"),
 		use_vision: bool = True,
 		use_vision_for_planner: bool = False,
 		save_conversation_path: Optional[str] = None,
@@ -472,7 +472,7 @@ class Agent:
 		logger.debug(f'🤖 {emoji} Page summary: {response.current_state.page_summary}')
 		logger.info(f'{emoji} Eval: {response.current_state.evaluation_previous_goal}')
 		logger.info(f'🧠 Memory: {response.current_state.memory}')
-		logger.info(f'🎯 Next goal: {response.current_state.next_goal}')
+		logger.info(f'🎯 Next goaaaaaaaaaaaaaaaaaaaaaaaal: {response.current_state.next_goal}')
 		for i, action in enumerate(response.action):
 			logger.info(f'🛠️  Action {i + 1}/{len(response.action)}: {action.model_dump_json(exclude_unset=True)}')
 
@@ -535,22 +535,6 @@ class Agent:
 	@observe(name='agent.run', ignore_output=True)
 	async def run(self, max_steps: int = 100) -> AgentHistoryList:
 		"""Execute the task with maximum number of steps"""
-
-		selenium_code = """
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-import time
-
-driver = webdriver.Chrome()
-wait = WebDriverWait(driver, 10)
-			
-try:
-		"""
-
-		with open("output/selenium_test.py", "w", encoding="utf-8") as test_file:
-			test_file.write(selenium_code)
 		try:
 			self._log_agent_run()
 
@@ -587,13 +571,6 @@ try:
 					break
 			else:
 				logger.info('❌ Failed to complete task in maximum steps')
-			selenium_code = """
-finally:
-	time.sleep(2)  
-	driver.quit()
-"""
-			with open("output/selenium_test.py", "a", encoding="utf-8") as test_file:
-				test_file.write(selenium_code)
 				
 			return self.history
 		finally:
