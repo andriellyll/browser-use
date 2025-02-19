@@ -12,7 +12,7 @@ llm = ChatOpenAI(
 	model='gpt-4o',
 	temperature=0.0,
 )
-task = 'Find the founders of browser-use and draft them a short personalized message'
+task = 'Visit https://pomofocus.io/, create 2 tasks and after this clear all tasks at once with the "Clear all tasks" button in the three dots dropdown'
 
 agent = Agent(task=task, llm=llm)
 
