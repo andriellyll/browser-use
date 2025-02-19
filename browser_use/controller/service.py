@@ -34,13 +34,16 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import Select
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.action_chains import ActionChains
 import time
 
 driver = webdriver.Chrome()
-wait = WebDriverWait(driver, 10)
-			
-try:
-		"""
+
+driver.implicitly_wait(10)
+
+"""
 
 class Controller:
 	def __init__(
@@ -59,20 +62,20 @@ class Controller:
 		if self.save_selenium_code and '/' not in self.save_selenium_code:
 			self.save_selenium_code = f'{self.save_selenium_code}/'
 		
-		self._save_selenium_code(initial_selenium_code)
+		self._save_selenium_code(initial_selenium_code, overwrite=True)
 		self.exclude_actions = exclude_actions
 		self.output_model = output_model
 		self.registry = Registry(exclude_actions)
 		self._register_default_actions()
 
-	def _save_selenium_code(self, selenium_action: str) -> None:
+	def _save_selenium_code(self, selenium_action: str, overwrite: bool = False) -> None:
 		"""Create directory and save Selenium action to a separate code file if path is specified"""
 		if not self.save_selenium_code:
 			return 
 		os.makedirs(os.path.dirname(self.save_selenium_code), exist_ok=True)        # Save the Selenium action to a dedicated .py file per action
 		file_path = f"{self.save_selenium_code}{self.save_py}.py"
-		print("teste2")
-		with open(file_path, 'a', encoding='utf-8') as f:
+
+		with open(file_path, 'w' if overwrite else 'a', encoding='utf-8') as f:
 			f.write(selenium_action + '\n')
 
 	def _register_default_actions(self):
@@ -102,13 +105,9 @@ class Controller:
 			msg = f'🔍  Searched for "{params.query}" in Google'
 			logger.info(msg)
 
-			selenium_code = f"""
-			driver.implicitly_wait(10)
-			driver.get('{url}')
-				"""
+			selenium_code = f"""\ndriver.get('{url}')"""
 
-			with open("output/selenium_test.py", "a", encoding="utf-8") as test_file:
-				test_file.write(selenium_code)
+			self._save_selenium_code(selenium_code)
 
 			return ActionResult(extracted_content=msg, include_in_memory=True)
 
@@ -120,7 +119,7 @@ class Controller:
 			msg = f'🔗  Navigated to {params.url}'
 			logger.info(msg)
 
-			selenium_code = f"""\n\tdriver.get('{params.url}')"""
+			selenium_code = f"""\ndriver.get('{params.url}')"""
 				
 			self._save_selenium_code(selenium_code)
 			return ActionResult(extracted_content=msg, include_in_memory=True)
@@ -130,12 +129,9 @@ class Controller:
 			await browser.go_back()
 			msg = '🔙  Navigated back'
 			logger.info(msg)
-			selenium_code = f"""
-			driver.implicitly_wait(10)
-			browser.back()
-				"""
-			with open("output/selenium_test.py", "a", encoding="utf-8") as test_file:
-				test_file.write(selenium_code)
+			selenium_code = f"""\ndriver.back()"""
+
+			self._save_selenium_code(selenium_code)
 			return ActionResult(extracted_content=msg, include_in_memory=True)
 
 		# Element Interaction Actions
@@ -161,8 +157,8 @@ class Controller:
 			try:
 
 				selenium_code = f"""
-	element_to_click = driver.find_element(By.XPATH, '{element_node.xpath}')
-	element_to_click.click()
+element_to_click = driver.find_element(By.XPATH, '{element_node.xpath}')
+element_to_click.click()
 """
 				
 				self._save_selenium_code(selenium_code)
@@ -206,14 +202,10 @@ class Controller:
 			logger.debug(f'Element xpath: {element_node.xpath}')
 
 			selenium_code = f"""
-			driver.implicitly_wait(10)
-			driver.findElement(By.XPATH, '{element_node.xpath}').sendKeys("your value");
-			element_to_input.send_keys("{params.text}")
-
-
+element_to_input = driver.find_element(By.XPATH, '{element_node.xpath}')
+element_to_input.send_keys("{params.text}")
 				"""
-			with open("output/selenium_test.py", "a", encoding="utf-8") as test_file:
-				test_file.write(selenium_code)
+			self._save_selenium_code(selenium_code)
 
 			return ActionResult(extracted_content=msg, include_in_memory=True)
 
@@ -226,7 +218,7 @@ class Controller:
 			await page.wait_for_load_state()
 			msg = f'🔄  Switched to tab {params.page_id}'
 			logger.info(msg)
-			selenium_code = f"""\n\tdriver.switch_to.window({params.page_id})"""
+			selenium_code = f"""\ndriver.switch_to.window(driver.window_handles[{params.page_id}])"""
 				
 			self._save_selenium_code(selenium_code)
 			
@@ -236,24 +228,14 @@ class Controller:
 		async def open_tab(params: OpenTabAction, browser: BrowserContext):
 			await browser.create_new_tab(params.url)
 
-			selenium_code = (
-					"from selenium.webdriver.common.action_chains import ActionChains\n"
-					"driver.execute_script('window.open()')\n"
-					"driver.switch_to.window(driver.window_handles[-1])\n"
-					f"driver.get('{params.url}')"
-			)
-			self._save_selenium_code(selenium_code)
-
 			msg = f'🔗  Opened new tab with {params.url}'
 			logger.info(msg)
 			selenium_code = f"""
-			driver.implicitly_wait(10)
-			driver.execute_script("window.open('{params.url}', '_blank');")
-			driver.switch_to.window(driver.window_handles[-1])
-			driver.implicitly_wait(10)
+driver.execute_script("window.open('{params.url}', '_blank');")
+driver.switch_to.window(driver.window_handles[-1])
 				"""
-			with open("output/selenium_test.py", "a", encoding="utf-8") as test_file:
-				test_file.write(selenium_code)
+			
+			self._save_selenium_code(selenium_code)
 			return ActionResult(extracted_content=msg, include_in_memory=True)
 
 		# Content Actions
@@ -288,15 +270,15 @@ class Controller:
 			if params.amount is not None:
 				await page.evaluate(f'window.scrollBy(0, {params.amount});')
 
-				selenium_code = f"""\n\tdriver.execute_script("window.scrollTo(0, {params.amount})")"""
+				selenium_code = f"""\ndriver.execute_script("window.scrollTo(0, {params.amount})")"""
 			else:
 				await page.evaluate('window.scrollBy(0, window.innerHeight);')
+				selenium_code = f"""\ndriver.execute_script("window.scrollTo(0, window.innerHeight)")"""
 
 			amount = f'{params.amount} pixels' if params.amount is not None else 'one page'
 			msg = f'🔍  Scrolled down the page by {amount}'
 			
-			with open("output/selenium_test.py", "a", encoding="utf-8") as test_file:
-				test_file.write(selenium_code)
+			self._save_selenium_code(selenium_code)
 
 			logger.info(msg)
 			return ActionResult(
@@ -313,11 +295,16 @@ class Controller:
 			page = await browser.get_current_page()
 			if params.amount is not None:
 				await page.evaluate(f'window.scrollBy(0, -{params.amount});')
+				selenium_code = f"""\ndriver.execute_script("window.scrollTo(0, -{params.amount})")"""
 			else:
 				await page.evaluate('window.scrollBy(0, -window.innerHeight);')
+				selenium_code = f"""\ndriver.execute_script("window.scrollTo(0, -window.innerHeight)")"""
 
 			amount = f'{params.amount} pixels' if params.amount is not None else 'one page'
 			msg = f'🔍  Scrolled up the page by {amount}'
+
+			self._save_selenium_code(selenium_code)
+
 			logger.info(msg)
 			return ActionResult(
 				extracted_content=msg,
@@ -331,8 +318,6 @@ class Controller:
 		)
 		async def send_keys(params: SendKeysAction, browser: BrowserContext):
 			page = await browser.get_current_page()
-
-			await page.keyboard.press(params.keys)
 
 			await page.keyboard.press(params.keys)
 			
@@ -353,6 +338,21 @@ class Controller:
 				'Shift': 'Keys.SHIFT',
 				'Alt': 'Keys.ALT',
 			}
+		
+			selenium_code = """
+# Check if any interactive element is focused and only click body if needed
+active_element = driver.execute_script(\"\"\"
+    const active = document.activeElement;
+    const isInteractive = active.tagName !== 'BODY' 
+                         && active.tagName !== 'HTML' 
+                         && active !== document.body;
+    return isInteractive;
+\"\"\")
+
+if not active_element:
+    main_page = driver.find_element(By.TAG_NAME, 'body')
+    main_page.click()
+"""
 
 			# Verifica se é um atalho (contém +)
 			if '+' in params.keys:
@@ -360,53 +360,41 @@ class Controller:
 				modifiers = keys[:-1]  # todas as teclas exceto a última
 				final_key = keys[-1]   # última tecla
 
-				selenium_code = f"""
-	from selenium.webdriver.common.keys import Keys
-	from selenium.webdriver.common.action_chains import ActionChains
-	
-	actions = ActionChains(driver)
+				selenium_code += f"""
+
+actions = ActionChains(driver)
 
 """
 				# Adiciona key_down para cada modificador
 				for mod in modifiers:
 					mod_key = key_mapping.get(mod, f"'{mod}'")
-					selenium_code += f"\tactions.key_down({mod_key})\n"
+					selenium_code += f"actions.key_down({mod_key})\n"
 
 				# Adiciona a tecla final
 				final_selenium_key = key_mapping.get(final_key, f"'{final_key}'")
-				selenium_code += f"\tactions.send_keys({final_selenium_key})\n"
+				selenium_code += f"actions.send_keys({final_selenium_key})\n"
 
 				# Adiciona key_up para cada modificador (em ordem reversa)
 				for mod in reversed(modifiers):
 					mod_key = key_mapping.get(mod, f"'{mod}'")
-					selenium_code += f"\tactions.key_up({mod_key})\n"
+					selenium_code += f"actions.key_up({mod_key})\n"
 
-				selenium_code += "\tactions.perform()\n"
+				selenium_code += "actions.perform()\n"
 
 			else:
 				# Tecla única (não é atalho)
 				selenium_key = key_mapping.get(params.keys, f"'{params.keys}'")
-				selenium_code = f"""
-	from selenium.webdriver.common.keys import Keys
-	from selenium.webdriver.common.action_chains import ActionChains
-	
-	actions = ActionChains(driver)
-	actions.send_keys({selenium_key})
-	actions.perform()
+				selenium_code += f"""
+actions = ActionChains(driver)
+actions.send_keys({selenium_key})
+actions.perform()
 """
 			
 			self._save_selenium_code(selenium_code)
 
 			msg = f'⌨️  Sent keys: {params.keys}'
 			logger.info(msg)
-
-			selenium_code = f"""
-			driver.implicitly_wait(10)
-			active_element = driver.switch_to.active_element
-			active_element.send_keys(Keys.{params.keys.upper()})
-				"""
-			with open("output/selenium_test.py", "a", encoding="utf-8") as test_file:
-				test_file.write(selenium_code)
+			
 			return ActionResult(extracted_content=msg, include_in_memory=True)
 
 		@self.registry.action(
@@ -430,11 +418,18 @@ class Controller:
 							await asyncio.sleep(0.5)  # Wait for scroll to complete
 							msg = f'🔍  Scrolled to text: {text}'
 							logger.info(msg)
+							selenium_code = f"""
+element = driver.find_element(By.XPATH, f"//*[contains(text(), '{text}')]")
+driver.execute_script("arguments[0].scrollIntoView(true);", element)
+time.sleep(0.5)  # Wait for scroll to complete
+"""
+							self._save_selenium_code(selenium_code)
 							return ActionResult(extracted_content=msg, include_in_memory=True)
 					except Exception as e:
 						logger.debug(f'Locator attempt failed: {str(e)}')
 						continue
-
+				
+	
 				msg = f"Text '{text}' not found or not visible on page"
 				logger.info(msg)
 				return ActionResult(extracted_content=msg, include_in_memory=True)
@@ -515,17 +510,7 @@ class Controller:
 				msg = f'Error getting options: {str(e)}'
 				logger.info(msg)
 
-			selenium_code = f"""
-			driver.implicitly_wait(10)
-			dropdown_element = driver.find_element(By.XPATH, '{dom_element.xpath}')
-			if dropdown_element.tag_name.lower() == "select":
-				select = Select(dropdown_element)
-				options = select.options
-				"""
-			with open("output/selenium_test.py", "a", encoding="utf-8") as test_file:
-				test_file.write(selenium_code)
-
-				return ActionResult(extracted_content=msg, include_in_memory=True)
+			return ActionResult(extracted_content=msg, include_in_memory=True)
 
 		@self.registry.action(
 			description='Select dropdown option for interactive element index by the text of the option you want to select',
@@ -539,8 +524,6 @@ class Controller:
 			page = await browser.get_current_page()
 			selector_map = await browser.get_selector_map()
 			dom_element = selector_map[index]
-
-			print('select dropdown')
 
 			# Validate that we're working with a select element
 			if dom_element.tag_name != 'select':
@@ -607,6 +590,28 @@ class Controller:
 							msg = f'selected option {text} with value {selected_option_values}'
 							logger.info(msg + f' in frame {frame_index}')
 
+							selenium_code = f"""
+# First check if element is in an iframe
+found_in_frame = False
+
+try:
+	driver.switch_to.frame({frame_index})
+	dropdown = WebDriverWait(driver, 10).until(
+		EC.presence_of_element_located((By.XPATH, '{dom_element.xpath}'))
+	)
+	select = Select(dropdown)
+	select.select_by_visible_text("{text}")
+	found_in_frame = True
+except:
+	driver.switch_to.default_content()
+
+driver.switch_to.default_content()
+
+if not found_in_frame:
+    print(f"Could not select option '{text}' in any frame")
+"""
+							self._save_selenium_code(selenium_code)
+
 							return ActionResult(extracted_content=msg, include_in_memory=True)
 
 					except Exception as frame_e:
@@ -618,6 +623,7 @@ class Controller:
 
 				msg = f"Could not select option '{text}' in any frame"
 				logger.info(msg)
+
 				return ActionResult(extracted_content=msg, include_in_memory=True)
 
 			except Exception as e:
