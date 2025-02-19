@@ -60,10 +60,20 @@ class Controller:
 		)
 		async def search_google(params: SearchGoogleAction, browser: BrowserContext):
 			page = await browser.get_current_page()
-			await page.goto(f'https://www.google.com/search?q={params.query}&udm=14')
+			url = f'https://www.google.com/search?q={params.query}&udm=14'
+			await page.goto(url)
 			await page.wait_for_load_state()
 			msg = f'🔍  Searched for "{params.query}" in Google'
 			logger.info(msg)
+
+			selenium_code = f"""
+			driver.implicitly_wait(10)
+			driver.get('{url}')
+				"""
+
+			with open("output/selenium_test.py", "a", encoding="utf-8") as test_file:
+				test_file.write(selenium_code)
+
 			return ActionResult(extracted_content=msg, include_in_memory=True)
 
 		@self.registry.action('Navigate to URL in the current tab', param_model=GoToUrlAction)
@@ -80,6 +90,12 @@ class Controller:
 			await browser.go_back()
 			msg = '🔙  Navigated back'
 			logger.info(msg)
+			selenium_code = f"""
+			driver.implicitly_wait(10)
+			browser.back()
+				"""
+			with open("output/selenium_test.py", "a", encoding="utf-8") as test_file:
+				test_file.write(selenium_code)
 			return ActionResult(extracted_content=msg, include_in_memory=True)
 
 		# Element Interaction Actions
@@ -149,6 +165,17 @@ class Controller:
 				msg = f'⌨️  Input sensitive data into index {params.index}'
 			logger.info(msg)
 			logger.debug(f'Element xpath: {element_node.xpath}')
+
+			selenium_code = f"""
+			driver.implicitly_wait(10)
+			driver.findElement(By.XPATH, '{element_node.xpath}').sendKeys("your value");
+			element_to_input.send_keys("{params.text}")
+
+
+				"""
+			with open("output/selenium_test.py", "a", encoding="utf-8") as test_file:
+				test_file.write(selenium_code)
+
 			return ActionResult(extracted_content=msg, include_in_memory=True)
 
 		# Tab Management Actions
@@ -167,6 +194,14 @@ class Controller:
 			await browser.create_new_tab(params.url)
 			msg = f'🔗  Opened new tab with {params.url}'
 			logger.info(msg)
+			selenium_code = f"""
+			driver.implicitly_wait(10)
+			driver.execute_script("window.open('{params.url}', '_blank');")
+			driver.switch_to.window(driver.window_handles[-1])
+			driver.implicitly_wait(10)
+				"""
+			with open("output/selenium_test.py", "a", encoding="utf-8") as test_file:
+				test_file.write(selenium_code)
 			return ActionResult(extracted_content=msg, include_in_memory=True)
 
 		# Content Actions
@@ -200,11 +235,25 @@ class Controller:
 			page = await browser.get_current_page()
 			if params.amount is not None:
 				await page.evaluate(f'window.scrollBy(0, {params.amount});')
+
+				selenium_code = f"""
+				driver.implicitly_wait(10)
+				driver.execute_script(f"window.scrollBy(0, {params.amount});")
+				"""
 			else:
 				await page.evaluate('window.scrollBy(0, window.innerHeight);')
 
+				selenium_code = f"""
+				driver.implicitly_wait(10)
+				driver.execute_script(f"window.scrollBy(0, "window.innerHeight");")
+				"""
+
 			amount = f'{params.amount} pixels' if params.amount is not None else 'one page'
 			msg = f'🔍  Scrolled down the page by {amount}'
+			
+			with open("output/selenium_test.py", "a", encoding="utf-8") as test_file:
+				test_file.write(selenium_code)
+
 			logger.info(msg)
 			return ActionResult(
 				extracted_content=msg,
@@ -242,6 +291,14 @@ class Controller:
 			await page.keyboard.press(params.keys)
 			msg = f'⌨️  Sent keys: {params.keys}'
 			logger.info(msg)
+
+			selenium_code = f"""
+			driver.implicitly_wait(10)
+			active_element = driver.switch_to.active_element
+			active_element.send_keys(Keys.{params.keys.upper()})
+				"""
+			with open("output/selenium_test.py", "a", encoding="utf-8") as test_file:
+				test_file.write(selenium_code)
 			return ActionResult(extracted_content=msg, include_in_memory=True)
 
 		@self.registry.action(
@@ -347,6 +404,17 @@ class Controller:
 				logger.error(f'Failed to get dropdown options: {str(e)}')
 				msg = f'Error getting options: {str(e)}'
 				logger.info(msg)
+
+			selenium_code = f"""
+			driver.implicitly_wait(10)
+			dropdown_element = driver.find_element(By.XPATH, '{dom_element.xpath}')
+			if dropdown_element.tag_name.lower() == "select":
+				select = Select(dropdown_element)
+				options = select.options
+				"""
+			with open("output/selenium_test.py", "a", encoding="utf-8") as test_file:
+				test_file.write(selenium_code)
+
 				return ActionResult(extracted_content=msg, include_in_memory=True)
 
 		@self.registry.action(
