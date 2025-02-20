@@ -185,4 +185,5 @@ gcp-login.json
 *.pdf
 *.csv
 
-./output/
+output/
+output/**
